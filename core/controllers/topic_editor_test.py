@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for the topic editor page."""
+
 from __future__ import absolute_import  # pylint: disable=import-only-modules
 from __future__ import unicode_literals  # pylint: disable=import-only-modules
 
@@ -407,7 +408,8 @@ class TopicEditorTests(BaseTopicEditorControllerTests):
                             'en': {
                                 'filename': 'test.mp3',
                                 'file_size_bytes': 100,
-                                'needs_update': False
+                                'needs_update': False,
+                                'duration_secs': 0.34342
                             }
                         }
                     }
@@ -481,7 +483,8 @@ class TopicEditorTests(BaseTopicEditorControllerTests):
                         'en': {
                             'file_size_bytes': 100,
                             'filename': 'test.mp3',
-                            'needs_update': False
+                            'needs_update': False,
+                            'duration_secs': 0.34342
                         }
                     }
                 }
@@ -599,7 +602,8 @@ class TopicEditorTests(BaseTopicEditorControllerTests):
                             'en': {
                                 'filename': 'test.mp3',
                                 'file_size_bytes': 100,
-                                'needs_update': False
+                                'needs_update': False,
+                                'duration_secs': 0.34342
                             }
                         }
                     }

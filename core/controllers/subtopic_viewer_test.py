@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for subtopic viewer page"""
+
 from __future__ import absolute_import  # pylint: disable=import-only-modules
 from __future__ import unicode_literals  # pylint: disable=import-only-modules
 
@@ -81,7 +82,8 @@ class BaseSubtopicViewerControllerTests(test_utils.GenericTestBase):
                     'en': {
                         'filename': 'test.mp3',
                         'file_size_bytes': 100,
-                        'needs_update': False
+                        'needs_update': False,
+                        'duration_secs': 0.34234
                     }
                 }
             }

@@ -15,6 +15,7 @@
 # limitations under the License.
 
 """Common utilities for test classes."""
+
 from __future__ import absolute_import  # pylint: disable=import-only-modules
 from __future__ import unicode_literals  # pylint: disable=import-only-modules
 
@@ -90,9 +91,9 @@ def get_filepath_from_filename(filename, rootdir):
     filename by using os.path.join(root, filename).
 
     For example signup-page.mainpage.html is present in
-    core/templates/dev/head/pages/signup-page and error-page.mainpage.html is
-    present in core/templates/dev/head/pages/error-pages. So we walk through
-    core/templates/dev/head/pages and a match for signup-page.directive.html
+    core/templates/pages/signup-page and error-page.mainpage.html is
+    present in core/templates/pages/error-pages. So we walk through
+    core/templates/pages and a match for signup-page.directive.html
     is found in signup-page subdirectory and a match for
     error-page.directive.html is found in error-pages subdirectory.
 
@@ -141,7 +142,7 @@ def mock_get_template(unused_self, filename):
         jinja2.environment.Template. The template for the given file.
     """
     filepath = get_filepath_from_filename(
-        filename, os.path.join('core', 'templates', 'dev', 'head', 'pages'))
+        filename, os.path.join('core', 'templates', 'pages'))
     with python_utils.open_file(filepath, 'r') as f:
         file_content = f.read()
     return jinja2.environment.Template(file_content)
@@ -913,7 +914,7 @@ tags: []
         # Signup uses a custom urlfetch mock (URLFetchServiceMock), instead
         # of the stub provided by testbed. This custom mock is disabled
         # immediately once the signup is complete. This is done to avoid
-        # external  calls being made to Gravatar when running the backend
+        # external calls being made to Gravatar when running the backend
         # tests.
         gae_id = self.get_gae_id_from_email(email)
         user_services.create_new_user(gae_id, email)
@@ -1353,6 +1354,10 @@ tags: []
             corresponding_topic_id,
             language_code=constants.DEFAULT_LANGUAGE_CODE):
         """Creates an Oppia Story and saves it.
+
+        NOTE: Callers are responsible for ensuring that the
+        'corresponding_topic_id' provided is valid, unless a test explicitly
+        requires it to be invalid.
 
         Args:
             story_id: str. ID for the story to be created.
@@ -1839,6 +1844,97 @@ tags: []
             setattr(obj, attr, original)
 
     @contextlib.contextmanager
+    def swap_with_checks(
+            self, obj, attr, new_value, expected_args=None,
+            expected_kwargs=None, called=True):
+        """Swap an object's function value within the context of a
+        'with' statement. The object can be anything that supports
+        getattr and setattr, such as class instances, modules, ...
+
+        Examples:
+            If you want to check subprocess.Popen is invoked twice
+            like `subprocess.Popen(['python'], shell=True)` and
+            `subprocess.Popen(['python2], shell=False), you can first
+            define the mock function, then the swap, and just run the
+            target function in context, as follows:
+                def mock_popen(command, shell):
+                    return
+
+                popen_swap = self.swap_with_checks(
+                    subprocess, 'Popen', mock_popen, expected_args=[
+                        (['python'],), (['python2'],)], expected_kwargs=[
+                            {'shell': True,}, {'shell': False}])
+                with popen_swap:
+                    function_that_invokes_popen()
+
+        Args:
+            obj: *. the Python object whose attribute you want to swap.
+            attr: str. The name of the function to be swapped.
+            new_value: function. The new function you want to use.
+            expected_args: None|list(tuple). The expected args that you
+                want this function to be invoked with. When its value is None,
+                args will not be checked. If the value type is list, the
+                function will check whether the called args is the first element
+                in the list. If matched, this tuple will be removed from the
+                list.
+            expected_kwargs: None|list(dict). The expected keyword args
+                you want this function to be invoked with. Similar to
+                expected_args.
+            called: bool. Whether the function is expected to be invoked. This
+                will always be checked.
+
+        Yields:
+            context: The context with function replaced.
+        """
+        original = getattr(obj, attr)
+        # The actual error message will also include detail assert error message
+        # via the `self.longMessage` below.
+        msg = 'Expected checks failed when swapping out in %s.%s tests.' % (
+            obj.__name__, attr)
+
+        def wrapper(*args, **kwargs):
+            """Wrapper function for the new value. This function will do the
+            check before the wrapped function is invoked. After the function
+            finished, the wrapper will update how many times this function is
+            invoked.
+
+            Args:
+                args: tuple. The args passed into `attr` function.
+                kwargs: dict. The key word args passed into `attr` function.
+
+            Returns:
+                Result of `new_value`.
+            """
+            wrapper.called = True
+            if expected_args is not None:
+                self.assertEqual(args, expected_args[0], msg=msg)
+                expected_args.pop(0)
+            if expected_kwargs is not None:
+                self.assertEqual(kwargs, expected_kwargs[0], msg=msg)
+                expected_kwargs.pop(0)
+            result = new_value(*args, **kwargs)
+            return result
+
+        wrapper.called = False
+        setattr(obj, attr, wrapper)
+        error_occurred = False
+        try:
+            # This will show the detailed assert message.
+            self.longMessage = True
+            yield
+        except Exception:
+            error_occurred = True
+            # Raise issues thrown by the called function or assert error.
+            raise
+        finally:
+            setattr(obj, attr, original)
+            if not error_occurred:
+                self.assertEqual(wrapper.called, called, msg=msg)
+                self.assertFalse(expected_args, msg=msg)
+                self.assertFalse(expected_kwargs, msg=msg)
+            self.longMessage = False
+
+    @contextlib.contextmanager
     def login_context(self, email, is_super_admin=False):
         """Log in with the given email under the context of a 'with' statement.
 
@@ -2060,12 +2156,11 @@ class AppEngineTestBase(TestBase):
                 'html': '<p>This is a solution.</p>'
             }
         }
-        hints_list = [{
-            'hint_content': {
-                'content_id': 'hint_1',
-                'html': '<p>This is a hint.</p>'
-            }
-        }]
+        hints_list = [
+            state_domain.Hint(
+                state_domain.SubtitledHtml('hint_1', '<p>This is a hint.</p>')
+            )
+        ]
         state.update_interaction_solution(solution_dict)
         state.update_interaction_hints(hints_list)
         state.interaction.customization_args = {
